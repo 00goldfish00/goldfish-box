@@ -1,5 +1,5 @@
 import email
-import imaplib
+import poplib
 import os
 import shutil
 import queue
@@ -10,32 +10,11 @@ from tkinter import Canvas, Label, Tk, Menu
 from PIL import Image, ImageTk
 
 
-def clean(text):    # clean text for creating a folder
-    return "".join(c if c.isalnum() else "_" for c in text)
-
-
-def get_body(msg):  # get email content i.e body
-    if msg.is_multipart():
-        return get_body(msg.get_payload(0))
-    else:
-        return msg.get_payload(None, True)
-
-
-def get_emails(result_bytes):  # get list of emails under label
-    msgs = []  # all the email data are pushed inside an array
-    for num in result_bytes[0].split():
-        type, data = imap.fetch(num, '(RFC822)')
-        msgs.append(data)
-    return msgs
-
-
 def scale_img(image, size):
-    '''Scales image to fit largest dimention into size while maintaining aspect ratio'''
-
+    '''Scales image to fit the largest dimention into size while maintaining the images aspect ratio.'''
     dim = image.size
 
-    # find scale ratio
-    if dim[0] > dim[1]:
+    if dim[0] > dim[1]:  # find scale ratio
         scale = size[0] / dim[0]
     else:
         scale = size[1] / dim[1]
@@ -45,214 +24,207 @@ def scale_img(image, size):
 
 
 def process_image(file_name, size=(800, 480), dir=''):
-    '''Converts image in path to PhotoImage object for tkinter and scales the image to fit the screen size'''
-
-    img_path = os.path.join(dir, 'images', file_name)
-
-    # if given file path does not end with .[image_type]
-    if not img_path.endswith('.\\*'):
-        img = default_img_path
+    '''Converts image in path to PhotoImage object for tkinter and scales the image to fit the window.'''
+    if not file_name.endswith('.\\*'):
+        img_path = default_img_path  # if given file does not have a file extension
+    else:
+        img_path = os.path.join(dir, 'images', file_name)
 
     raw_image = Image.open(img_path)  # open original image
     resized_img = scale_img(raw_image, size)  # resize the image to fit window
 
-    # processed_image = ImageTk.PhotoImage(resized_img)
-
-    # convert the image for use with tkinter
-    # Note: PhotoImage() can only be used after running Tk()
-    return ImageTk.PhotoImage(resized_img)
+    # NOTE: PhotoImage() can only be used after running Tk()
+    return ImageTk.PhotoImage(resized_img)  # convert the image for use with tkinter
 
 
-def label_display_image(next_frame):
-    global new_img_timeout, new_timeout_count
+def get_next_frame():
+    '''Select the next Tk image object and message text to display.'''
+    if new_mail_queue.not_empty:
+        return new_mail_queue.get(False)
 
-    if new_timeout_count > new_img_timeout:
-        new_timeout_count = 0
+    map_reader = open(os.path.join(HOME, 'mapping.txt'))
+    mapping_list = [line.split(',') for line in map_reader.readlines()]
+    sel = random.randint(0, len(mapping_list) - 1)
 
-    if new_timeout_count < 1:
-        try:
-            next_frame = img_queue.get(False)
-            new_timeout_count = 1
-        except queue.Empty:
-            image_list = os.listdir(os.path.join(home, 'images'))
-            image_list.sort()
-            image_paths = [os.path.join(home, 'images', file) for file in image_list]
-            # last_img = max(image_paths, key=os.path.getctime)
-            # print('newest image file:', last_img)
+    img_path = os.path.join(HOME, 'imgs', mapping_list[sel][0])
+    next_img = process_image(img_path, dir=HOME)
 
-            message_list = os.listdir(os.path.join(home, 'messages'))
-            message_list.sort()
-            message_paths = [os.path.join(home, 'messages', file) for file in message_list]
-            # last_msg = max(message_paths, key=os.path.getctime)
-            # print('newest message file:', last_msg)
+    msg_path = os.path.join(HOME, 'msgs', mapping_list[sel][1])
+    msg_reader = open(msg_path, 'r')
+    next_msg = msg_reader.read()
+    msg_reader.close()
 
-            sel = random.randint(0, len(image_paths) - 1)
-            # print(len(image_paths) - 1)
-
-            img_path = os.path.join(home, 'images', image_paths[sel])
-            next_img = process_image(img_path, dir=home)
-
-            msg_path = os.path.join(home, 'messages', message_paths[sel])
-            msg_reader = open(msg_path, 'r')
-            next_msg = msg_reader.read()
-            msg_reader.close()
-
-            next_frame = (next_img, next_msg)
-    else:
-        new_timeout_count += 1
-
-    # uncomment to display the current frame in the queue
-    #print(f'frame in queue:\n{str(next_frame[0])}\n{next_frame[1]}')
-    pic_frame.configure(image=next_frame[0], text=next_frame[1])
-
-    window.after(disp_timeout, label_display_image, next_frame)
+    return (next_img, next_msg)
 
 
-def email_scraper():
+def update_display(frame: tuple):
+    '''Update the screen with the Tk image object and message text given.'''
+    pic_frame.configure(image=frame[0], text=frame[1])
 
-    global txt_file_count, img_file_count, new_img_timeout, new_timeout_count
 
-    while True:
-        # calling function to check inbox
-        status, emails = imap.select("Inbox")
-        # print('"emails" variable:', emails)
+def scrape_email():
+    '''Download images and messages from any new emails and add them to the new email queue.'''
+    # check inbox
+    message_count, mailbox_size = pop3.stat()
+    print(message_count, mailbox_size)
 
-        # total number of emails
-        msg_count = int(emails[0])
-        # print('total message count:', msg_count)
+    # total number of emails
+    response, mesg_num_octets, octets = pop3.list()
+    print(f'Response: {response}')
+    for j in mesg_num_octets:
+        print(j)
+    print(f'Octets: {octets}')
+    # fetch emails from all users
+    # key, data = pop3.search(None, 'UNSEEN')
+    # mail_ids = data[0].split()
 
-        # fetch emails from all users
-        key, data = imap.search(None, 'UNSEEN')
-        mail_ids = data[0].split()
-        #print('new e-mails:', len(mail_ids))
+    # read through all new emails and download contents
+    for m in range(len(mesg_num_octets)):
 
-        # Uncomment to see raw data
-        #messages = get_emails(data)
-        #print('get_emails(data):\n', messages, '\nend of message output\n')
+        mail_data = pop3.retr(m+1)
+        print('Mail Data:\n', mail_data, '\n')
+        # raw_email = mail_data[0][1]
 
-        # read through all emails and collect contents
-        for ids in mail_ids:
+        # raw_strings = raw_email.decode('utf-8')
+        # message = email.message_from_string(raw_strings)
 
-            mail_type, mail_data = imap.fetch(ids, '(RFC822)')
-            raw_email = mail_data[0][1]
+        # for part in message.walk():
 
-            raw_strings = raw_email.decode('utf-8')
-            message = email.message_from_string(raw_strings)
+        #     # check for a file in the email
+        #     img_file_name = part.get_filename()
+        #     if bool(img_file_name):
+        #         img_file_path = os.path.join(HOME, 'imgs', f'{img_file_name}')
+        #         if not os.path.isfile(img_file_path):
+        #             # if file does not exist download it
+        #             fp = open(img_file_path, 'wb')
+        #             fp.write(part.get_payload(decode=True))
+        #             fp.close()
+        #     else:
+        #         # if there is no file then use the default image
+        #         img_file_name = 'default_img.png'
+        #         img_file_path = os.path.join(HOME, 'imgs', img_file_name)
 
-            for part in message.walk():
-                img_file_name = part.get_filename()
-                img_file_path = ''
+        #     # check for a message in the email
+        #     if part.get_content_type() == 'text/plain':
+        #         # ignore image file names
+        #         if img_file_name:
+        #             continue
+        #         payload = part.get_payload()
+        #         if payload.find('.jpg') > -1 or payload.find('.png') > -1:
+        #             continue
 
-                msg_file_name = f'{txt_file_count}_message.txt'
-                msg_file_path = ''
-                msg_contents = ''
-                
-                if bool(img_file_name):
-                    img_file_path = os.path.join(home, 'images', f'{img_file_count}_{img_file_name}')
-                    if not os.path.isfile(img_file_path):
-                        # if file does not exist download it
-                        fp = open(img_file_path, 'wb')
-                        fp.write(part.get_payload(decode=True))
-                        fp.close()
-                        # uid=ids.decode('utf-8')
-                        #print(f'Downloaded "{img_file_name}"')
-                        img_file_count += 1
-                    else:
-                        img_file_path = ''
+        #         # if text is found then create a message file
+        #         msg_file_name = f'msg_{msg_file_count}.txt'
+        #         msg_file_path = os.path.join(HOME, 'msgs', msg_file_name)
+        #         msg_path = open(msg_file_path, 'w')
+        #         msg_path.write(payload)
+        #         msg_path.close()
+        #         txt_file_count += 1
+        #     else:
+        #         # if there is no message then use the empty message file
+        #         msg_file_name = 'empty_msg.txt'
+        #         msg_file_path = os.path.join(HOME, 'msgs', msg_file_name)
 
-                if part.get_content_maintype() == 'multipart':
-                    continue
+        # map_files(img_file_name, msg_file_name)
+        # next_img = process_image(img_file_path, dir=HOME)
+        # msg_reader = open(msg_file_path, 'r')
+        # next_msg = msg_reader.read()
+        # msg_reader.close()
+        # new_mail_queue.put((next_img, next_msg))
 
-                if part.get_content_type() == 'text/plain':
-                    if img_file_name:
-                        continue
-                    payload = part.get_payload()
-                    if payload.find('.jpg') > -1 or payload.find('.png') > -1:
-                        continue
-                    
-                    msg_file_path = os.path.join(home, 'messages', msg_file_name)
-                    msg_path = open(msg_file_path, 'w')
-                    msg_path.write(payload)
-                    msg_path.close()
-                    msg_contents = payload
-                    #print(f'Created message file "{msg_file_name}"')
-                    txt_file_count += 1
 
-            if bool(img_file_path):
-                tmp_img = process_image(img_file_path)
-                img_queue.put((tmp_img, msg_contents))
-            else:
-                tmp_path = os.path.join(home, 'images', f'{txt_file_count}_black.png')
-                shutil.copyfile(default_img_path, tmp_path)
+def map_files(img_name, msg_name):
+    '''Add the names of an image file and its corresponding message file to the mapping file.'''
+    # Update this to use the 'with' operator
+    mapper = open(os.path.join(HOME, 'mapping.txt'), mode='wt', encoding='UTF-8')
+    mapper.write(f'{img_name}, {msg_name}\n')
+    mapper.close()
 
-                tmp_img = process_image(default_img_path)
-                img_queue.put((tmp_img, msg_contents))
 
-        #print('sleeping for:', 5, 'seconds')
-        time.sleep(disp_timeout/2000)
+def collect_display_loop():
+    '''Main loop which scrapes emails and then displays the collected messages and images on the screen.'''
+    scrape_email()
+    frame, new = get_next_frame()
+    update_display(frame)
+    if new:
+        for i in range(TIMEOUT_REP):
+            time.sleep(TIMEOUT/1000)
+            update_display(frame)
+    window.after(TIMEOUT, collect_display_loop)
+
+
+def rclick_menu(e):
+    exit_menu.tk_popup(e.x_root, e.y_root)
 
 
 def on_close():
-    print('closing email connection and logging out')
-    imap.close()
-    imap.logout()
-    print('closing window')
+    print('Closing email connection.')
+    pop3.quit()
+    print('Closing application window.')
     window.quit()
 
 
 if __name__ == '__main__':
-
     # user settings
-    screen_size = 800, 480
-    disp_timeout = 3600000
-    new_img_timeout = 3
-    username = 'sendcutedogstogf@gmail.com'
-    password = 'i<3Uc45S!E'
+    screen_size = (800, 480)
+    TIMEOUT = 3600000   # in milliseconds
+    TIMEOUT_REP = 3  # in number of loops to repeat
+    USERNAME = str("sendcutedogstogf@gmail.com")
+    PASSWORD = str("i<3Uc45S!E")
 
     # sender email addresses for filtering spam
     phone_email = '+14847565113@tmomail.net'
     personal_email = 'dp53899@gmail.com'
 
     # program settings
-    home = '//home//pi//GoldfishBox'
-    default_img_path = os.path.join(home, 'images', 'black.png')
-    default_msg_path = os.path.join(home, 'messages', 'message.txt')
-    default_msg = 'hi <3'
+    HOME = os.curdir  # path.join(os.curdir, 'GoldfishBox')
+    default_img_path = os.path.join(HOME, 'imgs', 'default_img.png')
+    default_msg_path = os.path.join(HOME, 'msgs', 'default_msg.txt')
+    empty_msg_path = os.path.join(HOME, 'msgs', 'empty_msg.txt')
     search_label = 'Inbox'
     screen_cen = screen_size[0]/2, screen_size[1]/2
     new_timeout_count = 0
 
-    # init images folder and default image
-    try:
-        images_path = os.path.join(home, 'images')
-        os.makedirs(images_path)
-
+    try:  # init images folder and default image
+        os.makedirs(os.path.join(HOME, 'imgs'))  # try to create imgs folder
         black_img = Image.new(mode = "RGB", size = screen_size)
         black_img.save(default_img_path)
-        print('created "images" folder')
+        print('Created imgs folder.')
     except (FileExistsError, FileNotFoundError) as e:
-        print('"images" folder already exists')
+        print('imgs folder already exists.')
 
-    # init messages folder and default message
-    try:
-        messages_path = os.path.join(home, 'messages')
-        os.makedirs(messages_path)
-
+    try:  # init messages folder and default message
+        os.makedirs(os.path.join(HOME, 'msgs'))  # try to create msgs folder
         creator = open(default_msg_path, mode='wt')
-        creator.write(default_msg)
+        creator.write('hi <3')
         creator.close()
-        print('created "messages" folder')
+        creator = open(empty_msg_path, mode='wt')
+        creator.close()
+        print('Created msgs folder.')
     except(FileExistsError, FileNotFoundError) as e:
-        print('"messages" folder already exists')
+        print('msgs folder already exists.')
+
+    if 'mapping.txt' in os.listdir(HOME):
+        print('mapping file already exists.')
+    else:
+        map_files('default_img.png', 'default_msg.txt')
+        print('Created mapping file.')
 
     # get number of images/messages already sent
-    img_file_count = len(os.listdir(os.path.join(home, 'images')))
-    txt_file_count = len(os.listdir(os.path.join(home, 'messages')))
+    img_file_count = len(os.listdir(os.path.join(HOME, 'imgs')))
+    msg_file_count = len(os.listdir(os.path.join(HOME, 'msgs')))
 
-    # make SSL connection with GMAIL for collecting emails
-#    imap = imaplib.IMAP4_SSL("imap.gmail.com")
-    # log in the user
-#    imap.login(username, password)
+    # log in the user and make connection with gmail for scraping emails
+    pop3 = poplib.POP3_SSL('pop.gmail.com', 995, timeout=120, )
+    pass_req = pop3.user(USERNAME)
+    print('Username Response:', pass_req)
+    if pass_req:
+        print('Sending Password')
+        pop3.pass_(PASSWORD)
+    else:
+        print("Error logging in.")
+        pop3.quit()
+        quit()
 
     # create window for display
     window = Tk(screenName=None, baseName=None, className='main window')
@@ -261,32 +233,28 @@ if __name__ == '__main__':
     window.title('HeartBox Display Window')  # sets window title
     window.geometry(f'{screen_size[0]}x{screen_size[1]}+{0}+{0}')  # sets windows initial size in top left
     #window.resizable(0, 0)  # disables window resizing in x and y directions
-    window.overrideredirect(1)  # 0 = normal window, 1 = borderless window
+    window.overrideredirect(1)  # 0 = normal window, 1 = borderless window01
 
+    # create a menu obejct and assign it the quit command button
     exit_menu = Menu(window, tearoff=False)
     exit_menu.add_command(label="quit program", command=on_close)
 
-    def rclick_menu(e):
-        exit_menu.tk_popup(e.x_root, e.y_root)
-
+    # bind right click to the quit menu created
     window.bind('<Button-3>', rclick_menu)
 
     # convert default image to PhotoImage for tkinter and scale image to screen size
-    default_img_tk = process_image(default_img_path, dir=home)
+    default_img_tk = process_image(default_img_path, dir=HOME)
 
     # create label to diplay images and text
     pic_frame = Label(window, compound='center', font='Helvetica 52 bold', fg='#FFFFFF', bg='#00090F', height=screen_size[1], width=screen_size[0])
     pic_frame.pack()
 
     # init image/message queue
-    img_queue = queue.Queue()
+    new_mail_queue = queue.Queue()
 
-    # download images and collect messages form emails
-#    download_thread = threading.Thread(target=email_scraper, args=())
-#    download_thread.daemon = True
-#    download_thread.start()
+    update_display((default_img_tk, 'hi <3'))
 
-    window.after(1000, label_display_image, (default_img_tk, default_msg))
+    # window.after(1000, collect_display_loop)
 
     window.protocol("WM_DELETE_WINDOW", on_close)
     window.mainloop()
