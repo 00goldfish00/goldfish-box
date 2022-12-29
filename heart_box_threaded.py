@@ -1,13 +1,17 @@
 import email
+from io import BytesIO
+# import rfc822
 import poplib
 import os
 import shutil
 import queue
 import random
+import string
 import threading
 import time
 from tkinter import Canvas, Label, Tk, Menu
 from PIL import Image, ImageTk
+import base64
 
 
 def scale_img(image, size):
@@ -66,71 +70,103 @@ def scrape_email():
     '''Download images and messages from any new emails and add them to the new email queue.'''
     # check inbox
     message_count, mailbox_size = pop3.stat()
-    print(message_count, mailbox_size)
+    print('Message Count:', message_count, 'Inbox Size:', mailbox_size, 'bytes')
 
     # total number of emails
     response, mesg_num_octets, octets = pop3.list()
     print(f'Response: {response}')
-    for j in mesg_num_octets:
-        print(j)
-    print(f'Octets: {octets}')
-    # fetch emails from all users
-    # key, data = pop3.search(None, 'UNSEEN')
-    # mail_ids = data[0].split()
+    print('Number of messages:', len(mesg_num_octets), '\n', mesg_num_octets)
+    # download a random message
+    id, size = random.choice(mesg_num_octets).split()
+    print(id, size)
+    resp, text, octets = pop3.retr(int(id))
+    bytes_cat = b''.join(text)
+    # bytes_obj = BytesIO()
+    message = email.message_from_bytes(bytes_cat)
 
-    # read through all new emails and download contents
-    for m in range(len(mesg_num_octets)):
+    for part in message.walk():
+        print(part.get_content_type())
 
-        mail_data = pop3.retr(m+1)
-        print('Mail Data:\n', mail_data, '\n')
-        # raw_email = mail_data[0][1]
 
-        # raw_strings = raw_email.decode('utf-8')
-        # message = email.message_from_string(raw_strings)
+    # message = rfc822.Message(file)
 
-        # for part in message.walk():
+    # for k, v in message.items():
+    #     print(k, "=", v)
 
-        #     # check for a file in the email
-        #     img_file_name = part.get_filename()
-        #     if bool(img_file_name):
-        #         img_file_path = os.path.join(HOME, 'imgs', f'{img_file_name}')
-        #         if not os.path.isfile(img_file_path):
-        #             # if file does not exist download it
-        #             fp = open(img_file_path, 'wb')
-        #             fp.write(part.get_payload(decode=True))
-        #             fp.close()
-        #     else:
-        #         # if there is no file then use the default image
-        #         img_file_name = 'default_img.png'
-        #         img_file_path = os.path.join(HOME, 'imgs', img_file_name)
+    # print(message.fp.read())
+    return
+    # for i in range(1): #range(len(mesg_num_octets)):
+    #     print('Number of bytes objects:', len(pop3.retr(i+1)[1]))
+    #     for j in pop3.retr(i+1)[1]:
+    #         try:
+    #             # print(j)#, type(j), len(j))
+    #             # b64code = j.decode("utf-8")
+    #             # code_with_padding = j.strip() + (b'====')  # * (4 - len(j.strip()) % 4)
+    #             # print(code_with_padding, len(code_with_padding))
+    #             decoded_msg = base64.b64decode(j).decode("utf-8")
+    #             print(decoded_msg)
+    #         except base64.binascii.Error:
+    #             print("Error")
+    #             pass
 
-        #     # check for a message in the email
-        #     if part.get_content_type() == 'text/plain':
-        #         # ignore image file names
-        #         if img_file_name:
-        #             continue
-        #         payload = part.get_payload()
-        #         if payload.find('.jpg') > -1 or payload.find('.png') > -1:
-        #             continue
+    
+    # # fetch emails from all users
+    # # key, data = pop3.search(None, 'UNSEEN')
+    # # mail_ids = data[0].split()
 
-        #         # if text is found then create a message file
-        #         msg_file_name = f'msg_{msg_file_count}.txt'
-        #         msg_file_path = os.path.join(HOME, 'msgs', msg_file_name)
-        #         msg_path = open(msg_file_path, 'w')
-        #         msg_path.write(payload)
-        #         msg_path.close()
-        #         txt_file_count += 1
-        #     else:
-        #         # if there is no message then use the empty message file
-        #         msg_file_name = 'empty_msg.txt'
-        #         msg_file_path = os.path.join(HOME, 'msgs', msg_file_name)
+    # # read through all new emails and download contents
+    # # for m in range(len(mesg_num_octets)):
 
-        # map_files(img_file_name, msg_file_name)
-        # next_img = process_image(img_file_path, dir=HOME)
-        # msg_reader = open(msg_file_path, 'r')
-        # next_msg = msg_reader.read()
-        # msg_reader.close()
-        # new_mail_queue.put((next_img, next_msg))
+    # #     mail_data = pop3.retr(m+1)
+    # #     print('Mail Data:\n', mail_data, '\n')
+    #     # raw_email = mail_data[0][1]
+
+    #     # raw_strings = raw_email.decode('utf-8')
+    #     message = email.message_from_bytes(raw_strings)
+
+    #     for part in message.walk():
+
+    #     #     # check for a file in the email
+    #     #     img_file_name = part.get_filename()
+    #     #     if bool(img_file_name):
+    #     #         img_file_path = os.path.join(HOME, 'imgs', f'{img_file_name}')
+    #     #         if not os.path.isfile(img_file_path):
+    #     #             # if file does not exist download it
+    #     #             fp = open(img_file_path, 'wb')
+    #     #             fp.write(part.get_payload(decode=True))
+    #     #             fp.close()
+    #     #     else:
+    #     #         # if there is no file then use the default image
+    #     #         img_file_name = 'default_img.png'
+    #     #         img_file_path = os.path.join(HOME, 'imgs', img_file_name)
+
+    #     #     # check for a message in the email
+    #     #     if part.get_content_type() == 'text/plain':
+    #     #         # ignore image file names
+    #     #         if img_file_name:
+    #     #             continue
+    #     #         payload = part.get_payload()
+    #     #         if payload.find('.jpg') > -1 or payload.find('.png') > -1:
+    #     #             continue
+
+    #     #         # if text is found then create a message file
+    #     #         msg_file_name = f'msg_{msg_file_count}.txt'
+    #     #         msg_file_path = os.path.join(HOME, 'msgs', msg_file_name)
+    #     #         msg_path = open(msg_file_path, 'w')
+    #     #         msg_path.write(payload)
+    #     #         msg_path.close()
+    #     #         txt_file_count += 1
+    #     #     else:
+    #     #         # if there is no message then use the empty message file
+    #     #         msg_file_name = 'empty_msg.txt'
+    #     #         msg_file_path = os.path.join(HOME, 'msgs', msg_file_name)
+
+    #     # map_files(img_file_name, msg_file_name)
+    #     # next_img = process_image(img_file_path, dir=HOME)
+    #     # msg_reader = open(msg_file_path, 'r')
+    #     # next_msg = msg_reader.read()
+    #     # msg_reader.close()
+    #     # new_mail_queue.put((next_img, next_msg))
 
 
 def map_files(img_name, msg_name):
@@ -170,7 +206,8 @@ if __name__ == '__main__':
     TIMEOUT = 3600000   # in milliseconds
     TIMEOUT_REP = 3  # in number of loops to repeat
     USERNAME = str("sendcutedogstogf@gmail.com")
-    PASSWORD = str("i<3Uc45S!E")
+    # PASSWORD = str("i<3Uc45S!E")
+    PASSWORD = str("hcuxitpskrovjkkn")
 
     # sender email addresses for filtering spam
     phone_email = '+14847565113@tmomail.net'
@@ -254,7 +291,10 @@ if __name__ == '__main__':
 
     update_display((default_img_tk, 'hi <3'))
 
+    scrape_email()
+
     # window.after(1000, collect_display_loop)
 
+    print('Starting Program Window')
     window.protocol("WM_DELETE_WINDOW", on_close)
     window.mainloop()
