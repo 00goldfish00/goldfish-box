@@ -88,12 +88,6 @@ def scrape_email():
         print(part.get_content_type())
 
 
-    # message = rfc822.Message(file)
-
-    # for k, v in message.items():
-    #     print(k, "=", v)
-
-    # print(message.fp.read())
     return
     # for i in range(1): #range(len(mesg_num_octets)):
     #     print('Number of bytes objects:', len(pop3.retr(i+1)[1]))
