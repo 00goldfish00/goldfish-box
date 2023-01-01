@@ -5,7 +5,8 @@ import os
 import queue
 import random
 import time
-from tkinter import Label, Tk, Menu
+from tkinter import Label, Tk, Menu, Canvas
+import tkinter
 from PIL import Image, ImageTk
 
 
@@ -22,13 +23,16 @@ def scale_img(image, size):
     return image.resize((int(dim[0]*scale), int(dim[1]*scale)))
 
 
-def process_image(file_path, size=(800, 480)):
+def process_image(path, size=(800, 480)):
     '''Converts image in path to PhotoImage object for tkinter and scales the image to fit the window.'''
-    raw_image = Image.open(file_path)  # open original image
+    print(path)
+    raw_image = Image.open(path)  # open original image
     resized_img = scale_img(raw_image, size)  # resize the image to fit window
 
     # NOTE: PhotoImage() can only be used after running Tk()
-    return ImageTk.PhotoImage(resized_img)  # convert the image for use with tkinter
+    tk_image = ImageTk.PhotoImage(resized_img)  # convert the image for use with tkinter
+
+    return tk_image
 
 
 def get_next_frame():
@@ -60,16 +64,15 @@ def get_next_frame():
 
 def update_display(frame: tuple):
     '''Update the screen with the Tk image object and message text given.'''
-    pic_frame.configure(image=frame[0], text=frame[1])
+    global img_tk
+    img_tk = frame[0]
+    pic_frame.configure(image=img_tk, text=frame[1])
 
 
 def scrape_email():
     '''Download images and messages from any new emails and add them to the new email queue.'''
     global msg_file_count
-    sel_resp = imap.select()
-    # print total number of emails in INBOX
-    # print('INBOX size:', sel_resp)
-    
+
     # retreive the IDs of unread emails
     resp, unseen_ids = imap.search(None, 'UNSEEN')
     mail_ids = unseen_ids[0].split()
@@ -138,6 +141,7 @@ def collect_display_loop():
     '''Main loop which scrapes emails and then displays the collected messages and images on the screen.'''
     scrape_email()
     frame, new = get_next_frame()
+    print(f'Frame: {frame}\nNew: {new}')
     update_display(frame)
     if new:
         for i in range(TIMEOUT_REP-1):
@@ -171,7 +175,7 @@ if __name__ == '__main__':
     personal_email = 'dp53899@gmail.com'
 
     # program settings
-    HOME = os.curdir  # path.join(os.curdir, 'GoldfishBox')
+    HOME = os.curdir
     default_img_path = os.path.join(HOME, 'imgs', 'default_img.png')
     default_msg_path = os.path.join(HOME, 'msgs', 'default_msg.txt')
     empty_msg_path = os.path.join(HOME, 'msgs', 'empty_msg.txt')
@@ -215,6 +219,8 @@ if __name__ == '__main__':
     imap = imaplib.IMAP4_SSL('imap.gmail.com', 993, timeout=120)
     pass_resp = imap.login(USERNAME, IMAP_APP_PASSWORD)
     # print('Login Response:', pass_resp)
+    sel_resp = imap.select()
+    # print('INBOX size:', sel_resp)
 
     # create window for display
     window = Tk(screenName=None, baseName=None, className='main window')
@@ -233,16 +239,21 @@ if __name__ == '__main__':
     window.bind('<Button-3>', rclick_menu)
 
     # convert default image to PhotoImage for tkinter and scale image to screen size
-    default_img_tk = process_image(default_img_path)
+    img_tk = process_image(default_img_path)
 
     # create label to diplay images and text
-    pic_frame = Label(window, compound='center', font='Helvetica 52 bold', fg='#FFFFFF', bg='#00090F', height=screen_size[1], width=screen_size[0])
+    pic_frame = Label(window, compound='center', font='Helvetica 52 bold', fg='#FFFFFF', bg='#804250', height=screen_size[1], width=screen_size[0])
+    # pic_frame = tkinter.Canvas(window)
+    # frame_img = pic_frame.create_image(screen_cen[0], screen_cen[1], ima)
+    # frame_msg = pic_frame.create_text(screen_cen[0], screen_cen[1])
     pic_frame.pack()
 
     # init image/message queue
     new_mail_queue = queue.Queue()
 
-    update_display((default_img_tk, 'hi <3'))
+    fraas = (img_tk, 'hi <3')
+    print(fraas)
+    update_display(fraas)
 
     window.after(1000, collect_display_loop)
 
