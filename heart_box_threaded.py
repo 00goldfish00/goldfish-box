@@ -166,13 +166,6 @@ if __name__ == '__main__':
     screen_size = (800, 480)
     TIMEOUT = 20000   # in milliseconds
     TIMEOUT_REP = 3  # in number of loops to repeat
-    USERNAME = str("sendcutedogstogf@gmail.com")
-    # PASSWORD = str("i<3Uc45S!E")
-    IMAP_APP_PASSWORD = str("snirgcrgpvlrqxkk")
-
-    # sender email addresses for filtering spam
-    phone_email = '+14847565113@tmomail.net'
-    personal_email = 'dp53899@gmail.com'
 
     # program settings
     HOME = os.curdir
