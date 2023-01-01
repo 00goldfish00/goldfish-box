@@ -76,7 +76,7 @@ def scrape_email():
     # retreive the IDs of unread emails
     resp, unseen_ids = imap.search(None, 'UNSEEN')
     mail_ids = unseen_ids[0].split()
-    print(f'Unread Mail IDs: {mail_ids}\n')
+    # print(f'Unread Mail IDs: {mail_ids}\n')
 
     # print the email content types present in each of the unread emails
     for id in mail_ids:
@@ -142,6 +142,7 @@ def collect_display_loop():
     update_display(frame)
     if new:
         for i in range(TIMEOUT_REP-1):
+            print('waiting for new')
             time.sleep(TIMEOUT/1000)
     window.after(TIMEOUT, collect_display_loop)
 
@@ -161,7 +162,7 @@ def on_close():
 if __name__ == '__main__':
     # user settings
     screen_size = (800, 480)
-    TIMEOUT = 20000   # in milliseconds
+    TIMEOUT = 1800000  # in milliseconds
     TIMEOUT_REP = 3  # in number of loops to repeat
 
     # program settings
